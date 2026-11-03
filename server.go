@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -140,18 +141,26 @@ func (e *Engine) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("query model=%s refresh=%v", model, req.Refresh)
 	ctx, cancel := context.WithTimeout(r.Context(), e.cfg.TotalTimeout)
 	defer cancel()
 	writeJSON(w, http.StatusOK, e.Query(ctx, model, req.Refresh))
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
+	raw, errMarshal := json.Marshal(payload)
+	if errMarshal != nil {
+		log.Printf("marshal response: %v", errMarshal)
+		status = http.StatusInternalServerError
+		raw = []byte(`{"error":"internal","message":"响应序列化失败"}`)
+	}
+	// 显式 Content-Length：注入侧的 ZCode 主进程客户端是手写 HTTP/1.1 解析，
+	// 不支持 chunked；设了长度 Go 就不会切换 chunked 编码。
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(len(raw)))
 	w.WriteHeader(status)
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	if errEncode := encoder.Encode(payload); errEncode != nil {
-		log.Printf("write response: %v", errEncode)
+	if _, errWrite := w.Write(raw); errWrite != nil {
+		log.Printf("write response: %v", errWrite)
 	}
 }
 

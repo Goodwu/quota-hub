@@ -65,11 +65,8 @@ func (e *Engine) Capabilities(ctx context.Context, now time.Time) CapabilitiesRe
 // Query answers one model across all serving accounts.
 func (e *Engine) Query(ctx context.Context, model string, refresh bool) QueryResponse {
 	now := time.Now()
-	resp := QueryResponse{
-		SchemaVersion: socketSchemaVersion,
-		Model:         model,
-		QueriedAt:     rfc3339(now),
-	}
+	resp := newQueryResponse(model)
+	resp.QueriedAt = rfc3339(now)
 	if !e.mgmt.HasKey() {
 		resp.Status = statusUnavailable
 		resp.Reason = "管理密钥未配置（~/.quota-hub/management.key）"

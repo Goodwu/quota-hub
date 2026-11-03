@@ -51,6 +51,16 @@ type QueryResponse struct {
 	QueriedAt     string         `json:"queriedAt"`
 }
 
+// newQueryResponse seeds accounts as an empty slice so clients never see null.
+func newQueryResponse(model string) QueryResponse {
+	return QueryResponse{
+		SchemaVersion: socketSchemaVersion,
+		Model:         model,
+		Status:        statusUnavailable,
+		Accounts:      []AccountQuota{},
+	}
+}
+
 // AccountQuota is one credential's quota view.
 type AccountQuota struct {
 	AccountID string            `json:"accountId"` // stable opaque id (hash)
