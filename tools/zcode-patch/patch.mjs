@@ -27,7 +27,7 @@ const MAIN_CHUNK = "out/main/index.js";
 const PRELOAD_CHUNK = "out/preload/index.cjs";
 // 弹层 children 数组尾锚点（b1t 面板 + 数组闭合 + U1t 函数头，组合唯一）。
 const POPUP_ANCHOR = "separated:!!(v&&ye||x)}):null]})})]})}function U1t(";
-const POPUP_INJECT = "separated:!!(v&&ye||x)}):null,(0,$.jsx)(__qhCpaPanel,{})]})})]})}function U1t(";
+const POPUP_INJECT = "separated:!!(v&&ye||x)}):null,(0,$.jsx)(__qhCpaPanel,{noContext:!(v&&ye)})]})})]})}function U1t(";
 // contextUsage 组件提前 return 门：CPA provider 下即使无上下文/官方 plan 也
 // 渲染弹层入口（圆圈），否则新建会话选 BYOK 模型时无法打开弹层。
 const GATE_ANCHOR = "if((!v||!pe)&&!x&&!S)return null;";

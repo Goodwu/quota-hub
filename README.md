@@ -55,6 +55,14 @@ curl --unix-socket ~/.quota-hub/quota-hub.sock -X POST http://localhost/v1/quota
 - **缓存**:账号额度 60s、路由快照 30s;`refresh` 绕缓存不绕退避;429 遵循 Retry-After(缺省 60s);401/403 报 `auth_required`;最后成功数据保留 15 分钟,标 `stale`+原始 `fetchedAt`
 - **安全**:socket 目录 0700、socket 0600;管理客户端仅回环、固定路径白名单、拒重定向、不走代理;凭证 `$TOKEN$` 由宿主替换,本进程不接触 token;日志与错误文案不含密钥/上游响应体/本地路径;拒绝接管正在服务的 socket
 
+## ZCode 补丁(tools/zcode-patch)的版本适配说明
+
+- **main / preload 注入**:文件末尾追加,不锚定压缩产物,基本跨版本通用
+- **renderer 注入**:锚点绑定 3.17.2 压缩产物(chunk 文件名 hash、压缩变量名 v/ye/x/S/pe、函数名 a2t/U1t、React/jsx 绑定名 Q/$),**换版本必须重新适配**
+- patch.mjs 对全部锚点做唯一性校验+目标绑定前置校验,版本漂移时安全拒绝(exit 4),不会注入坏包
+- ZCode 自动更新会还原 app.asar,升级后补丁失效(弹层无 CPA 分区),重跑 patch 即可
+- 适配方法:参照 tools/zcode-patch/inspect.mjs,用稳定字符串(i18n id `sidebar.usage.plan.fiveHour`、`modelSelection`、`exposeInMainWorld("zcode"` 等)反查新版本的压缩锚点后更新 patch.mjs 常量
+
 ## PoC / 测试
 
 ```bash

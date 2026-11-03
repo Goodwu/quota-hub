@@ -80,7 +80,12 @@ function __qhCpaActive() {
     if (!provider) return false;
     var wl = globalThis.__qhPopupWhitelist;
     if (wl && wl.length > 0) return wl.indexOf(provider) !== -1;
-    return provider.indexOf("account:") !== 0; // 官方 provider 前缀 account:
+    if (provider.indexOf("account:") === 0) return false; // 官方 provider
+    // BYOK provider 下，查询结果为 unmapped 的模型（不经 CPA）不展示；
+    // 预热未返回前先显示，结果就绪后自然收敛。
+    var cached = globalThis.__qhCache && globalThis.__qhCache[m.model];
+    if (cached && cached.data && cached.data.status === "unmapped") return false;
+    return true;
   } catch (_) {
     return false;
   }
@@ -138,7 +143,7 @@ function __qhFormatReset(iso) {
       d.getMonth() === now.getMonth() &&
       d.getDate() === now.getDate();
     if (sameDay) return hm;
-    return d.getMonth() + 1 + "月" + d.getDate() + "日 " + hm;
+    return d.getMonth() + 1 + "月" + d.getDate() + "日";
   } catch (_) {
     return "";
   }
@@ -240,7 +245,8 @@ function __qhRenderAccounts(data) {
   return (0, $.jsx)("div", { className: "space-y-2", children: blocks });
 }
 
-function __qhCpaPanel() {
+function __qhCpaPanel(props) {
+  var noContext = Boolean(props && props.noContext);
   var ctx = (globalThis && globalThis.__qhModel) || {};
   var model = ctx.model || "";
   var stateHook = (0, Q.useState)(function () {
@@ -284,8 +290,10 @@ function __qhCpaPanel() {
     };
   }, [model]);
 
-  // 官方/未指定 provider：不渲染分区，原生弹层保持不变。
+  // 官方/未指定 provider 或模型不经 CPA（unmapped）：不渲染分区，
+  // 原生弹层保持不变。
   if (!__qhCpaActive()) return null;
+  if (state.phase === "done" && state.data && state.data.status === "unmapped") return null;
 
   try {
     var body;
@@ -302,11 +310,11 @@ function __qhCpaPanel() {
       body = __qhRenderAccounts(state.data);
     }
     return (0, $.jsxs)("div", {
-      className: "border-t border-border pt-2 space-y-2",
+      // 弹层里没有官方 context 用量块时（新建会话），不画顶部分隔线。
+      className: noContext ? "space-y-2" : "border-t border-border pt-2 space-y-2",
       children: [
-        (0, $.jsxs)("div", { className: "flex min-w-0 items-center mb-2 gap-2", children: [
+        (0, $.jsx)("div", { className: "flex min-w-0 items-center mb-2", children: [
           (0, $.jsx)("span", { className: "min-w-0 truncate text-ui-base font-medium text-foreground", children: "CPA 额度" }),
-          (0, $.jsx)("span", { className: "text-ui-xs text-foreground-subtle truncate font-mono", children: model || "" }),
         ] }),
         body,
       ],
