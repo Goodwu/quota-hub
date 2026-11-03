@@ -28,6 +28,10 @@ const PRELOAD_CHUNK = "out/preload/index.cjs";
 // 弹层 children 数组尾锚点（b1t 面板 + 数组闭合 + U1t 函数头，组合唯一）。
 const POPUP_ANCHOR = "separated:!!(v&&ye||x)}):null]})})]})}function U1t(";
 const POPUP_INJECT = "separated:!!(v&&ye||x)}):null,(0,$.jsx)(__qhCpaPanel,{})]})})]})}function U1t(";
+// contextUsage 组件提前 return 门：CPA provider 下即使无上下文/官方 plan 也
+// 渲染弹层入口（圆圈），否则新建会话选 BYOK 模型时无法打开弹层。
+const GATE_ANCHOR = "if((!v||!pe)&&!x&&!S)return null;";
+const GATE_INJECT = "if((!v||!pe)&&!x&&!S&&!__qhCpaActive())return null;";
 
 const args = process.argv.slice(2);
 const appPath = flagValue("--app") || "/Applications/ZCode.app";
@@ -98,6 +102,7 @@ for (const [label, probe] of [
   ["React 绑定 Q", "(0,Q.useState)"],
   ["jsx 工厂 $", "(0,$.jsx)"],
   ["弹层锚点", POPUP_ANCHOR],
+  ["弹层门锚点", GATE_ANCHOR],
 ]) {
   if (!rendererNow.includes(probe)) {
     console.error(`渲染层缺少 ${label}（${JSON.stringify(probe)}），版本漂移，拒绝注入`);
@@ -129,6 +134,12 @@ if (anchorHits !== 1) {
   process.exit(4);
 }
 renderer = renderer.replace(POPUP_ANCHOR, POPUP_INJECT);
+const gateHits = renderer.split(GATE_ANCHOR).length - 1;
+if (gateHits !== 1) {
+  console.error(`弹层门锚点出现 ${gateHits} 次（需恰好 1 次），版本漂移，拒绝注入`);
+  process.exit(4);
+}
+renderer = renderer.replace(GATE_ANCHOR, GATE_INJECT);
 renderer = renderer + "\n" + rendererAppend;
 // 教训 3：注入恰好一次（弹层调用点 1 次 + 组件定义 1 次 = 2 处引用）。
 if (renderer.split("__qhCpaPanel").length - 1 !== 2) {

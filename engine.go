@@ -40,11 +40,12 @@ func NewEngine(cfg Config, mgmt *MgmtClient, router *Router) *Engine {
 // Capabilities reports service health for GET /v1/capabilities.
 func (e *Engine) Capabilities(ctx context.Context, now time.Time) CapabilitiesResponse {
 	resp := CapabilitiesResponse{
-		SchemaVersion: socketSchemaVersion,
-		Service:       "quota-hub",
-		Status:        "ok",
-		Adapters:      []string{"plugin-quota", "codex-usage"},
-		ServerTime:    rfc3339(now),
+		SchemaVersion:  socketSchemaVersion,
+		Service:        "quota-hub",
+		Status:         "ok",
+		Adapters:       []string{"plugin-quota", "codex-usage"},
+		PopupProviders: e.cfg.PopupProviders,
+		ServerTime:     rfc3339(now),
 	}
 	if !e.mgmt.HasKey() {
 		resp.Status = "degraded"

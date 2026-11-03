@@ -43,6 +43,7 @@ type Config struct {
 	SocketPath            string         `json:"socket_path"`
 	ManagementKeyFile     string         `json:"management_key_file"`
 	ModelMappings         []ModelMapping `json:"model_mappings"`
+	PopupProviders        []string       `json:"popup_providers"`
 	QuotaCacheTTL         time.Duration  `json:"-"`
 	RouteCacheTTL         time.Duration  `json:"-"`
 	StaleAfter            time.Duration  `json:"-"`

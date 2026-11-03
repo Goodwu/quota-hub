@@ -26,12 +26,13 @@ const (
 
 // CapabilitiesResponse is GET /v1/capabilities.
 type CapabilitiesResponse struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	Service       string   `json:"service"`
-	Status        string   `json:"status"`           // ok | degraded
-	Reason        string   `json:"reason,omitempty"` // degraded 的安全原因
-	Adapters      []string `json:"adapters"`
-	ServerTime    string   `json:"serverTime"`
+	SchemaVersion  int      `json:"schemaVersion"`
+	Service        string   `json:"service"`
+	Status         string   `json:"status"`           // ok | degraded
+	Reason         string   `json:"reason,omitempty"` // degraded 的安全原因
+	Adapters       []string `json:"adapters"`
+	PopupProviders []string `json:"popupProviders,omitempty"` // 空=渲染层自动判定(非官方 provider)
+	ServerTime     string   `json:"serverTime"`
 }
 
 // QueryRequest is POST /v1/quota/query. Only the full model id and refresh
