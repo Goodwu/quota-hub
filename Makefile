@@ -9,7 +9,7 @@ VERSION ?= $(if $(GIT_DESCRIBE),$(patsubst v%,%,$(GIT_DESCRIBE)),0.1.0)
 BIN := bin/quota-hub
 LAUNCH_AGENT_LABEL := com.quota-hub
 LAUNCH_AGENT := $(HOME)/Library/LaunchAgents/$(LAUNCH_AGENT_LABEL).plist
-INSTALL_BIN := /usr/local/bin/quota-hub
+INSTALL_BIN := $(HOME)/.local/bin/quota-hub
 LOG := /tmp/quota-hub.launchd.log
 
 .PHONY: build test race fmt vet install uninstall restart logs clean
@@ -34,7 +34,7 @@ fmt:
 install: build
 	install -m 0755 $(BIN) $(INSTALL_BIN)
 	mkdir -p $(HOME)/Library/LaunchAgents
-	sed 's|/tmp/quota-hub.launchd.log|$(LOG)|' deploy/$(LAUNCH_AGENT_LABEL).plist > $(LAUNCH_AGENT)
+	sed -e 's|/usr/local/bin/quota-hub|$(INSTALL_BIN)|' -e 's|/tmp/quota-hub.launchd.log|$(LOG)|' deploy/$(LAUNCH_AGENT_LABEL).plist > $(LAUNCH_AGENT)
 	launchctl bootout gui/$$(id -u)/$(LAUNCH_AGENT_LABEL) 2>/dev/null || true
 	launchctl bootstrap gui/$$(id -u) $(LAUNCH_AGENT)
 	@echo "installed + started ($(LAUNCH_AGENT_LABEL)); logs: $(LOG)"
