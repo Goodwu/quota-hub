@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	mgmtPathAuthFiles = "/v0/management/auth-files"
-	mgmtPathModels    = "/v0/management/auth-files/models"
-	mgmtPathAPICall   = "/v0/management/api-call"
-	mgmtPathPluginQuo = "/v0/management/plugins/%s/quota"
+	mgmtPathAuthFiles      = "/v0/management/auth-files"
+	mgmtPathModels         = "/v0/management/auth-files/models"
+	mgmtPathAPICall        = "/v0/management/api-call"
+	mgmtPathPluginQuo      = "/v0/management/plugins/%s/quota"
+	mgmtPathQuotaProviders = "/v0/management/quota/providers"
 )
 
 // MgmtError is a typed management-API failure. Message is safe to expose to
@@ -207,7 +208,7 @@ func (c *MgmtClient) do(ctx context.Context, method, path string, body []byte, o
 }
 
 func isAllowedPath(method, path string) bool {
-	if method == http.MethodGet && (path == mgmtPathAuthFiles || strings.HasPrefix(path, mgmtPathModels+"?")) {
+	if method == http.MethodGet && (path == mgmtPathAuthFiles || path == mgmtPathQuotaProviders || strings.HasPrefix(path, mgmtPathModels+"?")) {
 		return true
 	}
 	if method == http.MethodPost && path == mgmtPathAPICall {
@@ -251,6 +252,27 @@ func truncateForLog(s string) string {
 		return s[:limit] + "…"
 	}
 	return s
+}
+
+// RegisteredQuotaProvider mirrors GET /v0/management/quota/providers.
+type RegisteredQuotaProvider struct {
+	PluginID           string   `json:"plugin_id"`
+	Provider           string   `json:"provider"`
+	SupportedProviders []string `json:"supported_providers,omitempty"`
+}
+
+type quotaProvidersEnvelope struct {
+	Providers []RegisteredQuotaProvider `json:"providers"`
+}
+
+// QuotaProviders returns the host-selected quota plugins with the providers
+// they serve (the auth-files list omits quota_plugin_id in this build).
+func (c *MgmtClient) QuotaProviders(ctx context.Context) ([]RegisteredQuotaProvider, error) {
+	var env quotaProvidersEnvelope
+	if errCall := c.do(ctx, http.MethodGet, mgmtPathQuotaProviders, nil, &env); errCall != nil {
+		return nil, errCall
+	}
+	return env.Providers, nil
 }
 
 // ListAuthFiles returns the credential list (providers, status, quota plugin).

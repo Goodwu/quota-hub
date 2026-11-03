@@ -9,6 +9,10 @@ import (
 
 func ptrFloat(v float64) *float64 { return &v }
 
+func atRFC3339(s string) flexInstant { return flexInstant{text: s} }
+
+func atUnix(seconds float64) flexInstant { return flexInstant{raw: seconds, isNum: true} }
+
 func floatApprox(got, want float64) bool {
 	diff := got - want
 	if diff < 0 {
@@ -25,19 +29,19 @@ func TestBuildCodexQuotaWindowClassification(t *testing.T) {
 		RateLimit: &codexRateLimitInfo{
 			PrimaryWindow: &codexUsageWindow{
 				UsedPercent:        ptrFloat(40),
-				ResetAt:            resetAt,
+				ResetAt:            atRFC3339(resetAt),
 				LimitWindowSeconds: ptrFloat(18000),
 			},
 			SecondaryWindow: &codexUsageWindow{
 				UsedPercent:        ptrFloat(70),
-				ResetAt:            resetAt,
+				ResetAt:            atRFC3339(resetAt),
 				LimitWindowSeconds: ptrFloat(604800),
 			},
 		},
 		CodeReviewRateLimit: &codexRateLimitInfo{
 			PrimaryWindow: &codexUsageWindow{
 				UsedPercent:        ptrFloat(0),
-				ResetAt:            resetAt,
+				ResetAt:            atRFC3339(resetAt),
 				LimitWindowSeconds: ptrFloat(18000),
 			},
 		},
@@ -142,6 +146,26 @@ func TestBuildCodexQuotaUnknownVsExhausted(t *testing.T) {
 	})
 }
 
+func TestParseCodexResetAtUnixSeconds(t *testing.T) {
+	raw := `{"plan_type":"pro","rate_limit":{"primary_window":{"used_percent":20,"reset_at":1793693132,"limit_window_seconds":18000}}}`
+	payload, errParse := parseCodexUsage([]byte(raw))
+	if errParse != nil {
+		t.Fatalf("parse: %v", errParse)
+	}
+	quota := buildCodexQuota(payload, time.Now())
+	if len(quota.Groups) == 0 || len(quota.Groups[0].Buckets) == 0 {
+		t.Fatal("no buckets")
+	}
+	reset := quota.Groups[0].Buckets[0].ResetTime
+	if reset == "" {
+		t.Fatal("unix-second reset_at must map to a reset time")
+	}
+	want := time.Unix(1793693132, 0).UTC().Format(time.RFC3339)
+	if reset != want {
+		t.Fatalf("reset = %s want %s", reset, want)
+	}
+}
+
 func TestParseCodexUsageCamelCase(t *testing.T) {
 	raw := `{"planType":"plus","rateLimit":{"primaryWindow":{"usedPercent":15,"resetAt":"2026-11-03T16:00:00Z","limitWindowSeconds":18000}}}`
 	payload, err := parseCodexUsage([]byte(raw))
@@ -154,7 +178,7 @@ func TestParseCodexUsageCamelCase(t *testing.T) {
 	if got := *payload.rateLimit().primary().usedPercent(); got != 15 {
 		t.Fatalf("usedPercent = %v", got)
 	}
-	if payload.rateLimit().primary().resetAt() == "" {
+	if _, ok := payload.rateLimit().primary().resetAt(); !ok {
 		t.Fatal("resetAt not decoded")
 	}
 }

@@ -146,14 +146,58 @@ func (r *codexRateLimitInfo) secondary() *codexUsageWindow {
 func (r *codexRateLimitInfo) limitReached() bool { return r.LimitReached || r.LimitReachedCamel }
 
 type codexUsageWindow struct {
-	UsedPercent        *float64 `json:"used_percent"`
-	UsedPercentCamel   *float64 `json:"usedPercent"`
-	ResetAt            string   `json:"reset_at"`
-	ResetAtCamel       string   `json:"resetAt"`
-	ResetAfterSeconds  *float64 `json:"reset_after_seconds"`
-	ResetAfterCamel    *float64 `json:"resetAfterSeconds"`
-	LimitWindowSeconds *float64 `json:"limit_window_seconds"`
-	LimitWindowCamel   *float64 `json:"limitWindowSeconds"`
+	UsedPercent        *float64    `json:"used_percent"`
+	UsedPercentCamel   *float64    `json:"usedPercent"`
+	ResetAt            flexInstant `json:"reset_at"`
+	ResetAtCamel       flexInstant `json:"resetAt"`
+	ResetAfterSeconds  *float64    `json:"reset_after_seconds"`
+	ResetAfterCamel    *float64    `json:"resetAfterSeconds"`
+	LimitWindowSeconds *float64    `json:"limit_window_seconds"`
+	LimitWindowCamel   *float64    `json:"limitWindowSeconds"`
+}
+
+// flexInstant accepts the two reset_at shapes wham/usage actually returns:
+// RFC3339 strings and unix-second numbers.
+type flexInstant struct {
+	raw   float64
+	text  string
+	isNum bool
+}
+
+func (f *flexInstant) UnmarshalJSON(raw []byte) error {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "null" || trimmed == "" {
+		return nil
+	}
+	if trimmed[0] == '"' {
+		_ = json.Unmarshal(raw, &f.text)
+		return nil
+	}
+	var num float64
+	if errNum := json.Unmarshal(raw, &num); errNum != nil {
+		// 非数值非字符串：保持零值，解析侧按缺失处理。
+		return nil
+	}
+	f.raw, f.isNum = num, true
+	return nil
+}
+
+// instant resolves the absolute time; zero means unknown.
+func (f flexInstant) instant() time.Time {
+	if f.isNum {
+		seconds := f.raw
+		if seconds > 1e12 { // 毫秒
+			return time.UnixMilli(int64(seconds))
+		}
+		if seconds > 0 {
+			return time.Unix(int64(seconds), 0)
+		}
+		return time.Time{}
+	}
+	if parsed, errParse := time.Parse(time.RFC3339, strings.TrimSpace(f.text)); errParse == nil {
+		return parsed
+	}
+	return time.Time{}
 }
 
 func (w *codexUsageWindow) usedPercent() *float64 {
@@ -163,11 +207,13 @@ func (w *codexUsageWindow) usedPercent() *float64 {
 	return w.UsedPercentCamel
 }
 
-func (w *codexUsageWindow) resetAt() string {
-	if w.ResetAt != "" {
-		return w.ResetAt
+func (w *codexUsageWindow) resetAt() (time.Time, bool) {
+	for _, candidate := range []flexInstant{w.ResetAt, w.ResetAtCamel} {
+		if t := candidate.instant(); !t.IsZero() {
+			return t, true
+		}
 	}
-	return w.ResetAtCamel
+	return time.Time{}, false
 }
 
 func (w *codexUsageWindow) resetAfter() *float64 {
@@ -325,7 +371,7 @@ func appendCodexBucket(group *CPAGroup, window string, w *codexUsageWindow, limi
 			value = 1
 		}
 		fraction = &value
-	case (limitReached || (allowed != nil && !*allowed)) && codexResetTime(w, now) != "":
+	case (limitReached || (allowed != nil && !*allowed)) && hasCodexReset(w, now):
 		zero := 0.0
 		fraction = &zero
 	}
@@ -333,7 +379,9 @@ func appendCodexBucket(group *CPAGroup, window string, w *codexUsageWindow, limi
 		Window:            window,
 		RemainingFraction: fraction,
 	}
-	if reset := codexResetTime(w, now); reset != "" {
+	if reset, ok := w.resetAt(); ok {
+		bucket.ResetTime = rfc3339(reset)
+	} else if reset := codexResetTime(w, now); reset != "" {
 		bucket.ResetTime = reset
 	}
 	if seconds := w.windowSeconds(); seconds != nil {
@@ -342,14 +390,19 @@ func appendCodexBucket(group *CPAGroup, window string, w *codexUsageWindow, limi
 	group.Buckets = append(group.Buckets, bucket)
 }
 
-// codexResetTime resolves the absolute reset instant: reset_at first, else
-// reset_after_seconds relative to now.
-func codexResetTime(w *codexUsageWindow, now time.Time) string {
-	if raw := strings.TrimSpace(w.resetAt()); raw != "" {
-		if parsed, errParse := time.Parse(time.RFC3339, raw); errParse == nil {
-			return rfc3339(parsed)
-		}
+// hasCodexReset reports whether any reset signal (reset_at or
+// reset_after_seconds) can be resolved — mirrors the web console's
+// "resetLabel !== '-'" gate for exhausted windows.
+func hasCodexReset(w *codexUsageWindow, now time.Time) bool {
+	if _, ok := w.resetAt(); ok {
+		return true
 	}
+	return codexResetTime(w, now) != ""
+}
+
+// codexResetTime resolves the fallback reset instant from
+// reset_after_seconds relative to now (reset_at handled by resetAt()).
+func codexResetTime(w *codexUsageWindow, now time.Time) string {
 	if after := w.resetAfter(); after != nil && *after >= 0 {
 		return rfc3339(now.Add(time.Duration(*after * float64(time.Second))))
 	}

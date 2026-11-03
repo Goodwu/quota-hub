@@ -158,13 +158,32 @@ func (r *Router) snapshotFor(ctx context.Context, force bool) (*routeSnapshot, e
 	}
 }
 
-// buildSnapshot merges the auth-file list with per-file model lists. A file
-// whose models query fails is kept with an empty model list (exact matching
-// will simply not hit it); a total auth-files failure fails the snapshot.
+// buildSnapshot merges the auth-file list with per-file model lists and the
+// host quota-provider map. A file whose models query fails is kept with an
+// empty model list (exact matching will simply not hit it); a total
+// auth-files failure fails the snapshot.
 func buildSnapshot(ctx context.Context, mgmt *MgmtClient) (*routeSnapshot, error) {
 	files, errList := mgmt.ListAuthFiles(ctx)
 	if errList != nil {
 		return nil, errList
+	}
+	// auth-files 不带 quota_plugin_id（v8 专属字段），改从宿主 quota providers
+	// 注册表取 provider→pluginID；失败只降级为无插件适配，不失败整个快照。
+	pluginByProvider := map[string]string{}
+	if providers, errProviders := mgmt.QuotaProviders(ctx); errProviders == nil {
+		for _, p := range providers {
+			if p.PluginID == "" {
+				continue
+			}
+			if p.Provider != "" {
+				pluginByProvider[strings.ToLower(p.Provider)] = p.PluginID
+			}
+			for _, supported := range p.SupportedProviders {
+				if supported != "" {
+					pluginByProvider[strings.ToLower(supported)] = p.PluginID
+				}
+			}
+		}
 	}
 	snap := &routeSnapshot{at: time.Now(), byModel: map[string][]int{}}
 	providerSet := map[string]bool{}
@@ -172,15 +191,20 @@ func buildSnapshot(ctx context.Context, mgmt *MgmtClient) (*routeSnapshot, error
 		if f.Disabled {
 			continue
 		}
+		provider := strings.TrimSpace(f.Provider)
+		quotaPlugin := strings.TrimSpace(f.QuotaPlugin)
+		if quotaPlugin == "" {
+			quotaPlugin = pluginByProvider[strings.ToLower(provider)]
+		}
 		account := Account{
 			AuthIndex:     strings.TrimSpace(f.AuthIndex),
 			Name:          strings.TrimSpace(f.Name),
 			Label:         strings.TrimSpace(f.Label),
-			Provider:      strings.TrimSpace(f.Provider),
+			Provider:      provider,
 			Status:        strings.TrimSpace(f.Status),
 			Disabled:      f.Disabled,
 			Unavailable:   f.Unavailable,
-			QuotaPluginID: strings.TrimSpace(f.QuotaPlugin),
+			QuotaPluginID: quotaPlugin,
 			Email:         strings.TrimSpace(f.Email),
 			ChatGPTAcctID: f.IDTokenClaims.chatGPTAccountID(),
 			Revision:      revisionOf(f),

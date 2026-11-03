@@ -49,6 +49,21 @@ func runPoC() {
 	}
 	modelsByAccount := map[string][]string{}
 	var ccAccount, codexAccount *string
+	pluginByProvider := map[string]string{}
+	if providers, errProviders := mgmt.QuotaProviders(ctx); errProviders == nil {
+		fmt.Printf("  quota providers 注册表: %d 条\n", len(providers))
+		for _, p := range providers {
+			fmt.Printf("    plugin=%s provider=%s\n", p.PluginID, p.Provider)
+			if p.Provider != "" {
+				pluginByProvider[strings.ToLower(p.Provider)] = p.PluginID
+			}
+			for _, sp := range p.SupportedProviders {
+				pluginByProvider[strings.ToLower(sp)] = p.PluginID
+			}
+		}
+	} else {
+		fmt.Printf("  quota providers 查询失败: %v\n", errProviders)
+	}
 	for i := range files {
 		f := files[i]
 		fmt.Printf("  %-12s provider=%-18s status=%-8s disabled=%-5v quota_plugin=%s",
@@ -65,6 +80,10 @@ func runPoC() {
 		modelsByAccount[f.AuthIndex] = models
 		fmt.Printf("  models=%d\n", len(models))
 		if f.QuotaPlugin == "commandcode-go" && ccAccount == nil {
+			index := strings.TrimSpace(f.AuthIndex)
+			ccAccount = &index
+		}
+		if pluginByProvider[strings.ToLower(strings.TrimSpace(f.Provider))] == "commandcode-go" && ccAccount == nil {
 			index := strings.TrimSpace(f.AuthIndex)
 			ccAccount = &index
 		}
