@@ -309,12 +309,24 @@ function __qhCpaPanel(props) {
     } else {
       body = __qhRenderAccounts(state.data);
     }
+    // 额度更新时间：分区首个账号的 fetchedAt（本地时间）。
+    var updatedAtText = "";
+    try {
+      var accs = state.data && Array.isArray(state.data.accounts) ? state.data.accounts : [];
+      for (var ui = 0; ui < accs.length; ui++) {
+        if (accs[ui] && accs[ui].fetchedAt) {
+          updatedAtText = "已更新 " + __qhFormatReset(accs[ui].fetchedAt);
+          break;
+        }
+      }
+    } catch (_) {}
     return (0, $.jsxs)("div", {
       // 弹层里没有官方 context 用量块时（新建会话），不画顶部分隔线。
       className: noContext ? "space-y-2" : "border-t border-border pt-2 space-y-2",
       children: [
-        (0, $.jsx)("div", { className: "flex min-w-0 items-center mb-2", children: [
+        (0, $.jsxs)("div", { className: "flex min-w-0 items-center mb-2 gap-2", children: [
           (0, $.jsx)("span", { className: "min-w-0 truncate text-ui-base font-medium text-foreground", children: "CPA 额度" }),
+          updatedAtText ? (0, $.jsx)("span", { className: "ml-auto shrink-0 text-ui-xs text-foreground-subtle", children: updatedAtText }) : null,
         ] }),
         body,
       ],
